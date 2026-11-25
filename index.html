@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,14 +8,17 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Google Fonts: Prompt & Inter -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
   <!-- SheetJS (XLSX) for Excel Import & Export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
 
   <!-- Top Navigation Header -->
@@ -31,10 +35,12 @@
       </div>
 
       <div class="flex items-center space-x-3">
-        <span id="apiStatusBadge" class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-200 border border-amber-400/30">
+        <span id="apiStatusBadge"
+          class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-200 border border-amber-400/30">
           <span class="w-2 h-2 rounded-full bg-amber-400 mr-1.5"></span> Demo Mode (No API Key)
         </span>
-        <button onclick="openApiModal()" class="flex items-center space-x-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-medium px-3 py-2 rounded-lg transition border border-white/20">
+        <button onclick="openApiModal()"
+          class="flex items-center space-x-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-medium px-3 py-2 rounded-lg transition border border-white/20">
           <i data-lucide="key" class="w-4 h-4"></i>
           <span>ตั้งค่า API Key</span>
         </button>
@@ -48,7 +54,8 @@
     <!-- Input Method Selector Tabs -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-        <button id="tab-ocr" onclick="switchTab('ocr')" class="tab-btn active flex items-center justify-center space-x-2.5 py-3 px-4 rounded-lg font-medium text-sm transition">
+        <button id="tab-ocr" onclick="switchTab('ocr')"
+          class="tab-btn active flex items-center justify-center space-x-2.5 py-3 px-4 rounded-lg font-medium text-sm transition">
           <i data-lucide="scan-text" class="w-5 h-5"></i>
           <div class="text-left">
             <div class="font-semibold">1. AI Bill / Invoice OCR</div>
@@ -56,7 +63,8 @@
           </div>
         </button>
 
-        <button id="tab-excel" onclick="switchTab('excel')" class="tab-btn flex items-center justify-center space-x-2.5 py-3 px-4 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-50">
+        <button id="tab-excel" onclick="switchTab('excel')"
+          class="tab-btn flex items-center justify-center space-x-2.5 py-3 px-4 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-50">
           <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
           <div class="text-left">
             <div class="font-semibold">2. Excel / CSV Batch Import</div>
@@ -64,7 +72,8 @@
           </div>
         </button>
 
-        <button id="tab-manual" onclick="switchTab('manual')" class="tab-btn flex items-center justify-center space-x-2.5 py-3 px-4 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-50">
+        <button id="tab-manual" onclick="switchTab('manual')"
+          class="tab-btn flex items-center justify-center space-x-2.5 py-3 px-4 rounded-lg font-medium text-sm transition text-slate-600 hover:bg-slate-50">
           <i data-lucide="clipboard-edit" class="w-5 h-5"></i>
           <div class="text-left">
             <div class="font-semibold">3. Manual Case Entry</div>
@@ -83,25 +92,29 @@
             <i data-lucide="file-up" class="w-5 h-5 text-[#AE232A]"></i>
             อัปโหลดเอกสารบิล / ใบเสร็จ
           </h2>
-          <button onclick="loadSampleBill()" class="text-xs bg-blue-50 hover:bg-blue-100 text-[#1B3668] font-medium px-2.5 py-1 rounded-md border border-blue-200 transition">
+          <button onclick="loadSampleBill()"
+            class="text-xs bg-blue-50 hover:bg-blue-100 text-[#1B3668] font-medium px-2.5 py-1 rounded-md border border-blue-200 transition">
             โหลดบิลตัวอย่าง
           </button>
         </div>
 
         <!-- Dropzone -->
-        <div id="ocrDropzone" onclick="document.getElementById('ocrFileInput').click()" class="border-2 border-dashed border-slate-300 hover:border-[#1B3668] rounded-xl p-6 text-center cursor-pointer transition bg-slate-50/70">
-          <input type="file" id="ocrFileInput" accept=".pdf,image/*" class="hidden" onchange="handleOcrFile(event)" />
+        <div id="ocrDropzone" onclick="document.getElementById('ocrFileInput').click()"
+          class="border-2 border-dashed border-slate-300 hover:border-[#1B3668] rounded-xl p-6 text-center cursor-pointer transition bg-slate-50/70">
+          <input type="file" id="ocrFileInput" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp" class="hidden" onchange="handleOcrFile(event)" />
           <i data-lucide="cloud-upload" class="w-10 h-10 mx-auto text-slate-400 mb-2"></i>
           <p class="text-sm font-medium text-slate-700">คลิกเลือกไฟล์ หรือลากไฟล์มาวางที่นี่</p>
           <p class="text-xs text-slate-500 mt-1">รองรับไฟล์ PDF, JPG, PNG (ขนาดไม่เกิน 10MB)</p>
         </div>
 
         <!-- Preview Container -->
-        <div id="ocrPreviewBox" class="mt-4 flex-1 min-h-[280px] bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden relative">
+        <div id="ocrPreviewBox"
+          class="mt-4 flex-1 min-h-[280px] bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden relative">
           <p class="text-xs text-slate-400">ตัวอย่างเอกสารจะแสดงที่นี่</p>
         </div>
 
-        <button id="btnRunAi" onclick="processBillWithAI()" disabled class="mt-4 w-full bg-[#1B3668] hover:bg-[#14284d] disabled:bg-slate-300 text-white font-medium py-2.5 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+        <button id="btnRunAi" onclick="processBillWithAI()" disabled
+          class="mt-4 w-full bg-[#1B3668] hover:bg-[#14284d] disabled:bg-slate-300 text-white font-medium py-2.5 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
           <i data-lucide="sparkles" class="w-4 h-4"></i>
           <span>วิเคราะห์ข้อมูลด้วย AI OCR</span>
         </button>
@@ -121,22 +134,26 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">เลขที่เอกสาร / ใบกำกับภาษี *</label>
-              <input type="text" id="ocrDocNo" required placeholder="เช่น INV-2026-0891" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
+              <input type="text" id="ocrDocNo" required placeholder="เช่น INV-2026-0891"
+                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">วันที่เกิดรายการ *</label>
-              <input type="date" id="ocrDate" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
+              <input type="date" id="ocrDate" required
+                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
             </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">ชื่อผู้ขาย / คู่ค้า (Vendor) *</label>
-              <input type="text" id="ocrVendor" required placeholder="บริษัท เมดิคอล ซัพพลาย จำกัด" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
+              <input type="text" id="ocrVendor" required placeholder="บริษัท เมดิคอล ซัพพลาย จำกัด"
+                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">หน่วยงานที่รับผิดชอบ (Department) *</label>
-              <select id="ocrDept" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
+              <select id="ocrDept" required
+                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
                 <option value="OPD - ผู้ป่วยนอก">OPD - ผู้ป่วยนอก</option>
                 <option value="IPD - ผู้ป่วยใน">IPD - ผู้ป่วยใน</option>
                 <option value="ER - ฉุกเฉิน">ER - ฉุกเฉิน</option>
@@ -151,7 +168,8 @@
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">ประเภทต้นทุน (Cost Type) *</label>
-              <select id="ocrCostType" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
+              <select id="ocrCostType" required
+                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
                 <option value="COPQ - Internal Failure">COPQ - Internal Failure</option>
                 <option value="COPQ - External Failure">COPQ - External Failure</option>
                 <option value="COGQ - Prevention">COGQ - Prevention</option>
@@ -160,7 +178,8 @@
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">หมวดสาเหตุ (Root Cause) *</label>
-              <select id="ocrRootCause" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
+              <select id="ocrRootCause" required
+                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
                 <option value="Rework / ทำซ้ำ">Rework / ทำซ้ำ</option>
                 <option value="Scrap / เวชภัณฑ์ชำรุดหมดอายุ">Scrap / เวชภัณฑ์ชำรุดหมดอายุ</option>
                 <option value="Equipment Failure / เครื่องมือขัดข้อง">Equipment Failure / เครื่องมือขัดข้อง</option>
@@ -170,32 +189,39 @@
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">ผู้รับผิดชอบเคส (Owner) *</label>
-              <input type="text" id="ocrOwner" required placeholder="ระบุชื่อหัวหน้าเวร/ผู้ดูแล" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
+              <input type="text" id="ocrOwner" required placeholder="ระบุชื่อหัวหน้าเวร/ผู้ดูแล"
+                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
             </div>
           </div>
 
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">รายละเอียดรายการ / หมายเหตุ *</label>
-            <textarea id="ocrDesc" rows="2" required placeholder="ระบุรายละเอียดค่าใช้จ่ายจากบิล..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none"></textarea>
+            <textarea id="ocrDesc" rows="2" required placeholder="ระบุรายละเอียดค่าใช้จ่ายจากบิล..."
+              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none"></textarea>
           </div>
 
-          <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div
+            class="bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">ยอดก่อนภาษี (บาท)</label>
-              <input type="number" step="0.01" id="ocrSubtotal" oninput="calcOcrVat()" placeholder="0.00" class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
+              <input type="number" step="0.01" id="ocrSubtotal" oninput="calcOcrVat()" placeholder="0.00"
+                class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">VAT 7% (บาท)</label>
-              <input type="number" step="0.01" id="ocrVat" placeholder="0.00" class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
+              <input type="number" step="0.01" id="ocrVat" placeholder="0.00"
+                class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
             </div>
             <div>
               <label class="block text-xs font-semibold text-[#AE232A] mb-1">ยอดรวมสุทธิ (บาท) *</label>
-              <input type="number" step="0.01" id="ocrTotal" required placeholder="0.00" class="w-full px-3 py-1.5 text-sm font-bold text-[#1B3668] border border-slate-300 rounded-md bg-white" />
+              <input type="number" step="0.01" id="ocrTotal" required placeholder="0.00"
+                class="w-full px-3 py-1.5 text-sm font-bold text-[#1B3668] border border-slate-300 rounded-md bg-white" />
             </div>
           </div>
 
           <div class="flex justify-end pt-2">
-            <button type="submit" class="bg-[#AE232A] hover:bg-[#8f1b21] text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition flex items-center gap-2">
+            <button type="submit"
+              class="bg-[#AE232A] hover:bg-[#8f1b21] text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition flex items-center gap-2">
               <i data-lucide="plus-circle" class="w-4 h-4"></i>
               <span>บันทึกเข้าสู่ Central Hub & แจ้งเตือน</span>
             </button>
@@ -212,17 +238,21 @@
             <i data-lucide="file-spreadsheet" class="w-5 h-5 text-[#AE232A]"></i>
             นำเข้าข้อมูลแบบกลุ่มด้วยไฟล์ Excel (.xlsx) หรือ CSV
           </h2>
-          <p class="text-xs text-slate-500 mt-0.5">ตรวจสอบความถูกต้องของข้อมูลและไฮไลต์รายการที่มียอดเกิน 10,000 บาทให้อัตโนมัติ</p>
+          <p class="text-xs text-slate-500 mt-0.5">ตรวจสอบความถูกต้องของข้อมูลและไฮไลต์รายการที่มียอดเกิน 10,000
+            บาทให้อัตโนมัติ</p>
         </div>
-        <button onclick="downloadExcelTemplate()" class="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg shadow-sm transition">
+        <button onclick="downloadExcelTemplate()"
+          class="inline-flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium px-4 py-2.5 rounded-lg shadow-sm transition">
           <i data-lucide="download" class="w-4 h-4"></i>
           <span>ดาวน์โหลดไฟล์แม่แบบ (Template .xlsx)</span>
         </button>
       </div>
 
       <!-- Excel Dropzone -->
-      <div onclick="document.getElementById('excelFileInput').click()" class="border-2 border-dashed border-slate-300 hover:border-[#1B3668] rounded-xl p-8 text-center cursor-pointer transition bg-slate-50">
-        <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleExcelUpload(event)" />
+      <div onclick="document.getElementById('excelFileInput').click()"
+        class="border-2 border-dashed border-slate-300 hover:border-[#1B3668] rounded-xl p-8 text-center cursor-pointer transition bg-slate-50">
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" class="hidden"
+          onchange="handleExcelUpload(event)" />
         <i data-lucide="table-2" class="w-10 h-10 mx-auto text-emerald-600 mb-2"></i>
         <p class="text-sm font-medium text-slate-700">คลิกเพื่ออัปโหลดไฟล์ Excel (.xlsx, .xls) หรือ CSV</p>
         <p class="text-xs text-slate-500 mt-1">ระบบจะตรวจสอบคอลัมน์และคำนวณยอดรวมให้ดูก่อนกดยืนยันนำเข้า</p>
@@ -235,7 +265,8 @@
             พบข้อมูลทั้งหมด <strong id="excelRowCount">0</strong> รายการ |
             รายการเฝ้าระวัง (>10,000 บาท): <strong id="excelHighRiskCount" class="text-[#AE232A]">0</strong> รายการ
           </div>
-          <button onclick="commitExcelBatch()" class="bg-[#1B3668] hover:bg-[#14284d] text-white text-xs font-medium px-4 py-2 rounded-lg shadow-sm transition">
+          <button onclick="commitExcelBatch()"
+            class="bg-[#1B3668] hover:bg-[#14284d] text-white text-xs font-medium px-4 py-2 rounded-lg shadow-sm transition">
             ยืนยันนำเข้าทั้งหมดเข้าสู่ระบบ
           </button>
         </div>
@@ -267,14 +298,16 @@
           <i data-lucide="clipboard-edit" class="w-5 h-5 text-[#AE232A]"></i>
           บันทึกข้อมูลเหตุการณ์ความสูญเสียหน้างาน (Manual Case Entry)
         </h2>
-        <p class="text-xs text-slate-500 mt-0.5">ใช้สำหรับกรณีไม่มีใบเสร็จรับเงิน เช่น ค่าเสียเวลาทำซ้ำ (Rework Hours) หรือเวชภัณฑ์เสียหายหน้างาน</p>
+        <p class="text-xs text-slate-500 mt-0.5">ใช้สำหรับกรณีไม่มีใบเสร็จรับเงิน เช่น ค่าเสียเวลาทำซ้ำ (Rework Hours)
+          หรือเวชภัณฑ์เสียหายหน้างาน</p>
       </div>
 
       <form id="manualForm" onsubmit="saveManualRecord(event)" class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">วันที่เกิดเหตุการณ์ *</label>
-            <input type="date" id="manDate" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" />
+            <input type="date" id="manDate" required
+              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" />
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">หน่วยงานที่พบปัญหา *</label>
@@ -290,7 +323,8 @@
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">ประเภทต้นทุน (Cost Category) *</label>
-            <select id="manCostType" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+            <select id="manCostType" required
+              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
               <option value="COPQ - Internal Failure">COPQ - Internal Failure (ความสูญเสียภายใน)</option>
               <option value="COPQ - External Failure">COPQ - External Failure (ความสูญเสียภายนอก/ร้องเรียน)</option>
               <option value="COGQ - Prevention">COGQ - Prevention (การป้องกัน)</option>
@@ -302,22 +336,26 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">สาเหตุหลัก (Root Cause) *</label>
-            <select id="manRootCause" required class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
+            <select id="manRootCause" required
+              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white">
               <option value="Rework / ทำซ้ำ">Rework / การเจาะเลือดหรือทำหัตถการซ้ำ</option>
               <option value="Scrap / เวชภัณฑ์ชำรุดหมดอายุ">Scrap / ยาหรือเวชภัณฑ์ตกหล่นเสียหาย</option>
               <option value="Process Delay / ความล่าช้าในกระบวนการ">Process Delay / รอคอยผลตรวจล่าช้า</option>
-              <option value="Communication Error / สื่อสารคลาดเคลื่อน">Communication Error / ส่งต่อข้อมูลผิดพลาด</option>
+              <option value="Communication Error / สื่อสารคลาดเคลื่อน">Communication Error / ส่งต่อข้อมูลผิดพลาด
+              </option>
             </select>
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">ผู้รับผิดชอบดำเนินการต่อ (Next Owner) *</label>
-            <input type="text" id="manOwner" required placeholder="ระบุชื่อผู้รับผิดชอบเพื่อส่งแจ้งเตือน Outlook" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" />
+            <input type="text" id="manOwner" required placeholder="ระบุชื่อผู้รับผิดชอบเพื่อส่งแจ้งเตือน Outlook"
+              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg" />
           </div>
         </div>
 
         <div>
           <label class="block text-xs font-medium text-slate-600 mb-1">รายละเอียดเหตุการณ์ *</label>
-          <textarea id="manDesc" rows="2" required placeholder="อธิบายลักษณะเหตุการณ์ที่เกิดขึ้น..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></textarea>
+          <textarea id="manDesc" rows="2" required placeholder="อธิบายลักษณะเหตุการณ์ที่เกิดขึ้น..."
+            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"></textarea>
         </div>
 
         <!-- Cost Estimator Helper -->
@@ -329,25 +367,30 @@
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
             <div>
               <label class="block text-xs text-slate-600 mb-1">ค่าวัสดุ/เวชภัณฑ์เสียหาย (บาท)</label>
-              <input type="number" step="0.01" id="manMaterialCost" value="0" oninput="calcManualTotal()" class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
+              <input type="number" step="0.01" id="manMaterialCost" value="0" oninput="calcManualTotal()"
+                class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
             </div>
             <div>
               <label class="block text-xs text-slate-600 mb-1">จำนวนชั่วโมงทำซ้ำ (ชม.)</label>
-              <input type="number" step="0.5" id="manReworkHours" value="0" oninput="calcManualTotal()" class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
+              <input type="number" step="0.5" id="manReworkHours" value="0" oninput="calcManualTotal()"
+                class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
             </div>
             <div>
               <label class="block text-xs text-slate-600 mb-1">อัตราค่าแรงเฉลี่ย/ชม. (บาท)</label>
-              <input type="number" step="10" id="manHourlyRate" value="350" oninput="calcManualTotal()" class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
+              <input type="number" step="10" id="manHourlyRate" value="350" oninput="calcManualTotal()"
+                class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
             </div>
             <div>
               <label class="block text-xs font-semibold text-[#AE232A] mb-1">มูลค่าความสูญเสียรวม (บาท) *</label>
-              <input type="number" step="0.01" id="manTotalCost" required value="0" class="w-full px-3 py-1.5 text-sm font-bold text-[#1B3668] border border-slate-300 rounded-md bg-white" />
+              <input type="number" step="0.01" id="manTotalCost" required value="0"
+                class="w-full px-3 py-1.5 text-sm font-bold text-[#1B3668] border border-slate-300 rounded-md bg-white" />
             </div>
           </div>
         </div>
 
         <div class="flex justify-end pt-2">
-          <button type="submit" class="bg-[#AE232A] hover:bg-[#8f1b21] text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition flex items-center gap-2">
+          <button type="submit"
+            class="bg-[#AE232A] hover:bg-[#8f1b21] text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition flex items-center gap-2">
             <i data-lucide="send" class="w-4 h-4"></i>
             <span>บันทึกเคส & ส่งแจ้งเตือนผู้รับผิดชอบ</span>
           </button>
@@ -363,19 +406,23 @@
             <i data-lucide="database" class="w-5 h-5 text-[#AE232A]"></i>
             Central COPQ Data Hub (ฐานข้อมูลกลางสำหรับ Power BI)
           </h2>
-          <p class="text-xs text-slate-500 mt-0.5">รวมข้อมูลจากทั้ง 3 ช่องทาง พร้อมสถานะการแจ้งเตือนไปยัง Microsoft Outlook</p>
+          <p class="text-xs text-slate-500 mt-0.5">รวมข้อมูลจากทั้ง 3 ช่องทาง พร้อมสถานะการแจ้งเตือนไปยัง Microsoft
+            Outlook</p>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <button onclick="exportToExcel()" class="bg-[#1B3668] hover:bg-[#14284d] text-white text-xs font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+          <button onclick="exportToExcel()"
+            class="bg-[#1B3668] hover:bg-[#14284d] text-white text-xs font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm">
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
             <span>Export Excel (.xlsx)</span>
           </button>
-          <button onclick="exportToCSV()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+          <button onclick="exportToCSV()"
+            class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-medium px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 shadow-sm">
             <i data-lucide="file-text" class="w-4 h-4"></i>
             <span>Export CSV (Power BI)</span>
           </button>
-          <button onclick="clearAllRecords()" class="text-xs text-slate-500 hover:text-[#AE232A] px-2.5 py-2 rounded-lg transition">
+          <button onclick="clearAllRecords()"
+            class="text-xs text-slate-500 hover:text-[#AE232A] px-2.5 py-2 rounded-lg transition">
             ล้างข้อมูล
           </button>
         </div>
@@ -425,7 +472,8 @@
   </main>
 
   <!-- API Key Modal -->
-  <div id="apiModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div id="apiModal"
+    class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-bold text-[#1B3668] text-base">ตั้งค่า Gemini API Key</h3>
@@ -434,18 +482,24 @@
         </button>
       </div>
       <p class="text-xs text-slate-600 mb-4">
-        ใส่ Gemini API Key เพื่อเปิดใช้งานระบบอ่านไฟล์ PDF และรูปภาพบิลจริง (Key จะถูกบันทึกไว้ใน LocalStorage ของเบราว์เซอร์คุณเท่านั้น)
+        ใส่ Gemini API Key เพื่อเปิดใช้งานระบบอ่านไฟล์ PDF และรูปภาพบิลจริง (Key จะถูกบันทึกไว้ใน LocalStorage
+        ของเบราว์เซอร์คุณเท่านั้น)
       </p>
-      <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
+      <input type="password" id="geminiApiKeyInput" placeholder="AIzaSy..."
+        class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg mb-4 focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
       <div class="flex justify-end gap-2">
-        <button onclick="closeApiModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
-        <button onclick="saveApiKey()" class="px-4 py-2 text-xs font-medium bg-[#1B3668] text-white hover:bg-[#14284d] rounded-lg">บันทึก API Key</button>
+        <button onclick="closeApiModal()"
+          class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">ยกเลิก</button>
+        <button onclick="saveApiKey()"
+          class="px-4 py-2 text-xs font-medium bg-[#1B3668] text-white hover:bg-[#14284d] rounded-lg">บันทึก API
+          Key</button>
       </div>
     </div>
   </div>
 
   <!-- Outlook Notification Toast -->
-  <div id="outlookToast" class="hidden fixed bottom-5 right-5 max-w-sm w-full bg-white border-l-4 border-[#1B3668] rounded-lg shadow-xl p-4 z-50 transition-all">
+  <div id="outlookToast"
+    class="hidden fixed bottom-5 right-5 max-w-sm w-full bg-white border-l-4 border-[#1B3668] rounded-lg shadow-xl p-4 z-50 transition-all">
     <div class="flex items-start gap-3">
       <div class="bg-blue-100 text-[#1B3668] p-2 rounded-lg shrink-0">
         <i data-lucide="mail-check" class="w-5 h-5"></i>
@@ -454,12 +508,14 @@
         <div class="font-bold text-[#1B3668]">Power Automate → Outlook Alert</div>
         <p id="outlookToastMsg" class="text-slate-600 mt-1">ส่งอีเมลแจ้งเตือนผู้รับผิดชอบเรียบร้อยแล้ว</p>
       </div>
-      <button onclick="document.getElementById('outlookToast').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+      <button onclick="document.getElementById('outlookToast').classList.add('hidden')"
+        class="text-slate-400 hover:text-slate-600">
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
   </div>
 
-  <script src="js/app.js"></script>
+  <script src="app.js"></script>
 </body>
+
 </html>

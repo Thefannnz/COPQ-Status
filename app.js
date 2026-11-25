@@ -33,6 +33,7 @@ let records = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [
 
 let currentOcrFileBase64 = null;
 let currentOcrMimeType = null;
+let currentOcrPreviewUrl = null;
 let stagedExcelRows = [];
 
 // Set default dates to today
@@ -89,29 +90,100 @@ function updateApiBadge() {
 }
 
 // ==================== 1. AI BILL OCR LOGIC ====================
-function handleOcrFile(event) {
-  const file = event.target.files[0];
+const MAX_OCR_FILE_BYTES = 10 * 1024 * 1024;
+const EXT_TO_MIME = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  bmp: 'image/bmp'
+};
+
+function resolveOcrMimeType(file) {
+  if (file.type && (file.type === 'application/pdf' || file.type.startsWith('image/'))) {
+    return file.type;
+  }
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  return EXT_TO_MIME[ext] || '';
+}
+
+function processSelectedOcrFile(file) {
   if (!file) return;
-
-  currentOcrMimeType = file.type;
+  const statusEl = document.getElementById('ocrExtractStatus');
   const previewBox = document.getElementById('ocrPreviewBox');
-  const reader = new FileReader();
+  const btnRunAi = document.getElementById('btnRunAi');
 
+  const mimeType = resolveOcrMimeType(file);
+  if (!mimeType) {
+    statusEl.innerHTML = '<span class="text-[#AE232A] font-medium">รองรับเฉพาะไฟล์ PDF หรือรูปภาพ (JPG, PNG, WEBP)</span>';
+    return;
+  }
+  if (file.size > MAX_OCR_FILE_BYTES) {
+    statusEl.innerHTML = '<span class="text-[#AE232A] font-medium">ไฟล์มีขนาดเกิน 10MB กรุณาเลือกไฟล์ที่เล็กลง</span>';
+    return;
+  }
+
+  currentOcrMimeType = mimeType;
+  if (currentOcrPreviewUrl) {
+    URL.revokeObjectURL(currentOcrPreviewUrl);
+    currentOcrPreviewUrl = null;
+  }
+
+  const reader = new FileReader();
   reader.onload = function(e) {
     const dataUrl = e.target.result;
     currentOcrFileBase64 = dataUrl.split(',')[1];
 
-    if (file.type === 'application/pdf') {
-      previewBox.innerHTML = `<iframe src="${dataUrl}" class="w-full h-[300px] border-0"></iframe>`;
+    if (mimeType === 'application/pdf') {
+      currentOcrPreviewUrl = URL.createObjectURL(file);
+      previewBox.innerHTML = `<iframe src="${currentOcrPreviewUrl}" class="w-full h-[300px] border-0" title="PDF Preview"></iframe>`;
     } else {
       previewBox.innerHTML = `<img src="${dataUrl}" alt="Bill Preview" class="max-h-[300px] object-contain" />`;
     }
 
-    document.getElementById('btnRunAi').disabled = false;
-    document.getElementById('ocrExtractStatus').textContent = `พร้อมวิเคราะห์: ${file.name}`;
+    btnRunAi.disabled = false;
+    statusEl.textContent = `พร้อมวิเคราะห์: ${file.name}`;
+  };
+  reader.onerror = function() {
+    statusEl.innerHTML = '<span class="text-[#AE232A] font-medium">ไม่สามารถอ่านไฟล์ได้ กรุณาลองใหม่อีกครั้ง</span>';
   };
   reader.readAsDataURL(file);
 }
+
+function handleOcrFile(event) {
+  const file = event.target.files[0];
+  processSelectedOcrFile(file);
+  // Reset input so re-selecting the same file still triggers onchange
+  event.target.value = '';
+}
+
+(function initOcrDropzone() {
+  const dropzone = document.getElementById('ocrDropzone');
+  if (!dropzone) return;
+
+  ['dragenter', 'dragover'].forEach(evtName => {
+    dropzone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('border-[#1B3668]', 'bg-blue-50/70');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evtName => {
+    dropzone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('border-[#1B3668]', 'bg-blue-50/70');
+    });
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    processSelectedOcrFile(file);
+  });
+})();
 
 function loadSampleBill() {
   document.getElementById('ocrPreviewBox').innerHTML = `
