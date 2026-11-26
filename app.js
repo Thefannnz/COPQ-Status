@@ -2,7 +2,83 @@
 lucide.createIcons();
 
 const STORAGE_KEY = 'copq_hub_records_v1';
-const API_KEY_STORAGE = 'gemini_api_key_copq';
+const API_CONFIG_STORAGE = 'copq_ai_provider_config_v1';
+const LEGACY_API_KEY_STORAGE = 'gemini_api_key_copq';
+
+const PROVIDER_DEFAULTS = {
+  gemini: {
+    label: 'Google Gemini',
+    defaultModel: 'gemini-2.5-flash',
+    endpoint: '',
+    hint: 'แนะนำ: gemini-2.5-flash (อ่านได้ทั้งไฟล์ PDF และรูปภาพ)',
+    supportsPdf: true,
+    supportsVision: true
+  },
+  openai: {
+    label: 'OpenAI',
+    defaultModel: 'gpt-4o-mini',
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    hint: 'แนะนำ: gpt-4o-mini หรือ gpt-4o (รองรับไฟล์รูปภาพ JPG/PNG/WEBP)',
+    supportsPdf: false,
+    supportsVision: true
+  },
+  anthropic: {
+    label: 'Anthropic Claude',
+    defaultModel: 'claude-3-5-sonnet-latest',
+    endpoint: '',
+    hint: 'แนะนำ: claude-3-5-sonnet-latest (รองรับทั้ง PDF และรูปภาพ)',
+    supportsPdf: true,
+    supportsVision: true
+  },
+  qwen: {
+    label: 'Alibaba Qwen',
+    defaultModel: 'qwen4-max',
+    endpoint: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions',
+    hint: 'รองรับ: qwen4-max (อ่านรูปภาพบิลได้แม่นยำ) หรือ qwen3.8-27b (ประหยัด)',
+    supportsPdf: false,
+    supportsVision: true
+  },
+  zai: {
+    label: 'zAI / Zhipu GLM',
+    defaultModel: 'glm-5.3-flash',
+    endpoint: 'https://api.z.ai/api/paas/v4/chat/completions',
+    hint: 'แนะนำ: glm-5.3-flash (รองรับรูปภาพ/Vision) หรือ glm-5.3 (งานข้อความ/โค้ด)',
+    supportsPdf: false,
+    supportsVision: true
+  },
+  deepseek: {
+    label: 'DeepSeek',
+    defaultModel: 'deepseek-chat',
+    endpoint: 'https://api.deepseek.com/v1/chat/completions',
+    hint: 'รุ่น: deepseek-chat / deepseek-v4.1-flash (หมายเหตุ: หากโมเดลไม่รองรับรูปภาพ แนะนำเรียกผ่าน OpenRouter หรือใช้ Gemini/Qwen4-Max)',
+    supportsPdf: false,
+    supportsVision: false
+  },
+  xai: {
+    label: 'xAI Grok',
+    defaultModel: 'grok-4.7',
+    endpoint: 'https://api.x.ai/v1/chat/completions',
+    hint: 'รุ่น: grok-4.7 (รองรับรูปภาพ JPG/PNG/WEBP ความแม่นยำสูง)',
+    supportsPdf: false,
+    supportsVision: true
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    defaultModel: 'qwen/qwen4-max',
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    hint: 'รวมทุกค่ายในคีย์เดียว เช่น qwen/qwen4-max, x-ai/grok-4.7, z-ai/glm-5.3-flash, google/gemini-2.5-flash',
+    supportsPdf: true,
+    supportsVision: true
+  },
+  custom: {
+    label: 'Custom API',
+    defaultModel: 'qwen4-max',
+    endpoint: '',
+    hint: 'ระบุ Endpoint URL ที่รองรับมาตรฐาน OpenAI Chat Completions (/v1/chat/completions)',
+    supportsPdf: false,
+    supportsVision: true
+  }
+};
 
 let records = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [
   {
@@ -56,9 +132,96 @@ function switchTab(tabName) {
   document.getElementById(`tab-${tabName}`).classList.remove('text-slate-600');
 }
 
-// ==================== API KEY MANAGEMENT ====================
+// ==================== MULTI-PROVIDER AI MANAGEMENT ====================
+function getAiConfig() {
+  const saved = localStorage.getItem(API_CONFIG_STORAGE);
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {}
+  }
+  // Backward compatibility with legacy gemini key
+  const legacyKey = localStorage.getItem(LEGACY_API_KEY_STORAGE);
+  if (legacyKey) {
+    return {
+      provider: 'gemini',
+      model: PROVIDER_DEFAULTS.gemini.defaultModel,
+      apiKey: legacyKey,
+      baseUrl: ''
+    };
+  }
+  return {
+    provider: 'gemini',
+    model: PROVIDER_DEFAULTS.gemini.defaultModel,
+    apiKey: '',
+    baseUrl: ''
+  };
+}
+
+function detectProviderFromPrefix(key) {
+  const trimmed = (key || '').trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('AIza')) return 'gemini';
+  if (trimmed.startsWith('sk-ant-')) return 'anthropic';
+  if (trimmed.startsWith('sk-or-')) return 'openrouter';
+  if (trimmed.startsWith('xai-')) return 'xai';
+  // Note: OpenAI, Qwen (DashScope), and DeepSeek all use sk- prefix, so don't override if user already chose qwen/deepseek/zai
+  const current = document.getElementById('aiProviderSelect')?.value;
+  if (trimmed.startsWith('sk-') && !['qwen', 'deepseek', 'zai', 'custom'].includes(current)) {
+    return 'openai';
+  }
+  return null;
+}
+
+function autoDetectProviderFromKey(key) {
+  const detected = detectProviderFromPrefix(key);
+  const tagEl = document.getElementById('detectedProviderTag');
+  const selectEl = document.getElementById('aiProviderSelect');
+  if (detected && selectEl.value !== 'custom') {
+    selectEl.value = detected;
+    onProviderChange(true);
+    tagEl.textContent = `ตรวจพบค่าย: ${PROVIDER_DEFAULTS[detected].label}`;
+  } else if (!key.trim()) {
+    tagEl.textContent = '';
+  } else {
+    tagEl.textContent = '';
+  }
+}
+
+function onProviderChange(keepCustomModel = false) {
+  const provider = document.getElementById('aiProviderSelect').value;
+  const meta = PROVIDER_DEFAULTS[provider] || PROVIDER_DEFAULTS.gemini;
+  const modelInput = document.getElementById('aiModelInput');
+  const hintEl = document.getElementById('aiProviderHint');
+  const customGroup = document.getElementById('customEndpointGroup');
+
+  hintEl.textContent = meta.hint;
+  modelInput.placeholder = `เช่น ${meta.defaultModel}`;
+  if (!keepCustomModel || !modelInput.value.trim()) {
+    modelInput.value = meta.defaultModel;
+  } else {
+    // Replace if current value belongs to another provider's default
+    const allDefaults = Object.values(PROVIDER_DEFAULTS).map(p => p.defaultModel);
+    if (allDefaults.includes(modelInput.value.trim())) {
+      modelInput.value = meta.defaultModel;
+    }
+  }
+
+  if (provider === 'custom') {
+    customGroup.classList.remove('hidden');
+  } else {
+    customGroup.classList.add('hidden');
+  }
+}
+
 function openApiModal() {
-  document.getElementById('geminiApiKeyInput').value = localStorage.getItem(API_KEY_STORAGE) || '';
+  const cfg = getAiConfig();
+  document.getElementById('aiProviderSelect').value = cfg.provider || 'gemini';
+  document.getElementById('aiModelInput').value = cfg.model || PROVIDER_DEFAULTS[cfg.provider || 'gemini'].defaultModel;
+  document.getElementById('aiBaseUrlInput').value = cfg.baseUrl || '';
+  document.getElementById('aiApiKeyInput').value = cfg.apiKey || '';
+  document.getElementById('detectedProviderTag').textContent = '';
+  onProviderChange(true);
   document.getElementById('apiModal').classList.remove('hidden');
 }
 
@@ -67,22 +230,37 @@ function closeApiModal() {
 }
 
 function saveApiKey() {
-  const key = document.getElementById('geminiApiKeyInput').value.trim();
-  if (key) {
-    localStorage.setItem(API_KEY_STORAGE, key);
+  const provider = document.getElementById('aiProviderSelect').value;
+  const model = document.getElementById('aiModelInput').value.trim() || PROVIDER_DEFAULTS[provider].defaultModel;
+  const baseUrl = document.getElementById('aiBaseUrlInput').value.trim();
+  const apiKey = document.getElementById('aiApiKeyInput').value.trim();
+
+  if (apiKey) {
+    localStorage.setItem(API_CONFIG_STORAGE, JSON.stringify({ provider, model, baseUrl, apiKey }));
   } else {
-    localStorage.removeItem(API_KEY_STORAGE);
+    localStorage.removeItem(API_CONFIG_STORAGE);
   }
+  localStorage.removeItem(LEGACY_API_KEY_STORAGE);
+  updateApiBadge();
+  closeApiModal();
+}
+
+function clearApiSettings() {
+  localStorage.removeItem(API_CONFIG_STORAGE);
+  localStorage.removeItem(LEGACY_API_KEY_STORAGE);
+  document.getElementById('aiApiKeyInput').value = '';
+  document.getElementById('detectedProviderTag').textContent = '';
   updateApiBadge();
   closeApiModal();
 }
 
 function updateApiBadge() {
-  const key = localStorage.getItem(API_KEY_STORAGE);
+  const cfg = getAiConfig();
   const badge = document.getElementById('apiStatusBadge');
-  if (key) {
+  if (cfg.apiKey) {
+    const label = (PROVIDER_DEFAULTS[cfg.provider] || { label: cfg.provider }).label;
     badge.className = 'hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-200 border border-emerald-400/30';
-    badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 mr-1.5"></span> Gemini AI Ready';
+    badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 mr-1.5"></span> ${label} Ready`;
   } else {
     badge.className = 'hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-200 border border-amber-400/30';
     badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400 mr-1.5"></span> Demo Mode (No API Key)';
@@ -215,23 +393,144 @@ function loadSampleBill() {
   document.getElementById('ocrExtractStatus').innerHTML = '<span class="text-emerald-600 font-medium">✓ โหลดข้อมูลตัวอย่างสำเร็จ</span>';
 }
 
+function extractJsonFromText(rawText) {
+  const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('AI ไม่ได้ส่งข้อมูลกลับมาในรูปแบบ JSON ที่ถูกต้อง');
+  }
+}
+
+async function callGeminiProvider(cfg, prompt) {
+  const model = cfg.model || PROVIDER_DEFAULTS.gemini.defaultModel;
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: currentOcrMimeType, data: currentOcrFileBase64 } }
+        ]
+      }],
+      generationConfig: { responseMimeType: 'application/json' }
+    })
+  });
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message || 'Gemini API Error');
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+async function callAnthropicProvider(cfg, prompt) {
+  const model = cfg.model || PROVIDER_DEFAULTS.anthropic.defaultModel;
+  const isPdf = currentOcrMimeType === 'application/pdf';
+  const mediaBlock = isPdf
+    ? {
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: currentOcrFileBase64 }
+      }
+    : {
+        type: 'image',
+        source: { type: 'base64', media_type: currentOcrMimeType, data: currentOcrFileBase64 }
+      };
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': cfg.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: [
+          mediaBlock,
+          { type: 'text', text: prompt }
+        ]
+      }]
+    })
+  });
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message || 'Anthropic API Error');
+  return data.content?.[0]?.text || '';
+}
+
+async function callOpenAiCompatibleProvider(cfg, prompt) {
+  const providerMeta = PROVIDER_DEFAULTS[cfg.provider] || {};
+  const isPdf = currentOcrMimeType === 'application/pdf';
+  if (isPdf && cfg.provider !== 'openrouter') {
+    throw new Error(`ค่าย ${providerMeta.label || cfg.provider} รองรับการส่งไฟล์รูปภาพ (JPG/PNG/WEBP) โดยตรงผ่านเบราว์เซอร์เท่านั้น กรุณาแปลง PDF เป็นรูปภาพ หรือใช้ค่าย Gemini / Claude / OpenRouter`);
+  }
+
+  let endpoint = providerMeta.endpoint || 'https://api.openai.com/v1/chat/completions';
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${cfg.apiKey}`
+  };
+
+  if (cfg.provider === 'openrouter') {
+    headers['HTTP-Referer'] = window.location.origin;
+    headers['X-Title'] = 'COPQ Status Input Data Hub';
+  } else if (cfg.provider === 'custom') {
+    if (!cfg.baseUrl) throw new Error('กรุณาระบุ Base URL สำหรับ Custom Endpoint');
+    endpoint = cfg.baseUrl;
+  }
+
+  const dataUrl = `data:${currentOcrMimeType};base64,${currentOcrFileBase64}`;
+  const contentParts = [
+    { type: 'text', text: prompt },
+    isPdf
+      ? { type: 'file', file: { filename: 'invoice.pdf', file_data: dataUrl } }
+      : { type: 'image_url', image_url: { url: dataUrl } }
+  ];
+
+  const bodyPayload = {
+    model: cfg.model || providerMeta.defaultModel || 'gpt-4o-mini',
+    messages: [{
+      role: 'user',
+      content: contentParts
+    }]
+  };
+
+  if (['openai', 'qwen', 'deepseek'].includes(cfg.provider)) {
+    bodyPayload.response_format = { type: 'json_object' };
+  }
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(bodyPayload)
+  });
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message || 'API Error');
+  return data.choices?.[0]?.message?.content || '';
+}
+
 async function processBillWithAI() {
-  const apiKey = localStorage.getItem(API_KEY_STORAGE);
+  const cfg = getAiConfig();
   const statusEl = document.getElementById('ocrExtractStatus');
   const btn = document.getElementById('btnRunAi');
 
-  if (!apiKey) {
-    alert('กรุณาตั้งค่า Gemini API Key ที่มุมขวาบนก่อน หรือกดปุ่ม "โหลดบิลตัวอย่าง" เพื่อทดสอบครับ');
+  if (!cfg.apiKey) {
+    alert('กรุณาตั้งค่า AI API Key ที่มุมขวาบนก่อน หรือกดปุ่ม "โหลดบิลตัวอย่าง" เพื่อทดสอบครับ');
     openApiModal();
     return;
   }
 
   if (!currentOcrFileBase64) return;
 
+  const providerLabel = (PROVIDER_DEFAULTS[cfg.provider] || { label: cfg.provider }).label;
   btn.disabled = true;
-  statusEl.innerHTML = '<span class="text-blue-600 animate-pulse">กำลังอ่านเอกสารด้วย Gemini AI...</span>';
+  statusEl.innerHTML = `<span class="text-blue-600 animate-pulse">กำลังอ่านเอกสารด้วย ${providerLabel} (${cfg.model})...</span>`;
 
-  const prompt = `Extract invoice/bill data for a hospital COPQ (Cost of Poor Quality) system. Return ONLY valid JSON with these exact keys:
+  const prompt = `Extract invoice/bill data for a hospital COPQ (Cost of Poor Quality) system. Return ONLY valid JSON with these exact keys (no markdown, no explanation):
   {
     "docNo": "string",
     "date": "YYYY-MM-DD",
@@ -243,25 +542,16 @@ async function processBillWithAI() {
   }`;
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: currentOcrMimeType, data: currentOcrFileBase64 } }
-          ]
-        }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
-    });
+    let rawText = '';
+    if (cfg.provider === 'gemini') {
+      rawText = await callGeminiProvider(cfg, prompt);
+    } else if (cfg.provider === 'anthropic') {
+      rawText = await callAnthropicProvider(cfg, prompt);
+    } else {
+      rawText = await callOpenAiCompatibleProvider(cfg, prompt);
+    }
 
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-
-    const rawText = data.candidates[0].content.parts[0].text;
-    const parsed = JSON.parse(rawText);
+    const parsed = extractJsonFromText(rawText);
 
     document.getElementById('ocrDocNo').value = parsed.docNo || '';
     if (parsed.date) document.getElementById('ocrDate').value = parsed.date;
@@ -271,10 +561,10 @@ async function processBillWithAI() {
     document.getElementById('ocrVat').value = parsed.vat || 0;
     document.getElementById('ocrTotal').value = parsed.total || 0;
 
-    statusEl.innerHTML = '<span class="text-emerald-600 font-medium">✓ สกัดข้อมูลด้วย AI สำเร็จ</span>';
+    statusEl.innerHTML = `<span class="text-emerald-600 font-medium">✓ สกัดข้อมูลด้วย ${providerLabel} สำเร็จ</span>`;
   } catch (err) {
     console.error(err);
-    statusEl.innerHTML = `<span class="text-[#AE232A]">เกิดข้อผิดพลาด: ${err.message}</span>`;
+    statusEl.innerHTML = `<span class="text-[#AE232A]">เกิดข้อผิดพลาด (${providerLabel}): ${err.message}</span>`;
   } finally {
     btn.disabled = false;
   }
