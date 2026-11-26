@@ -83,150 +83,172 @@
       </div>
     </div>
 
-    <!-- ==================== PANEL 1: AI BILL OCR ==================== -->
-    <section id="panel-ocr" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <!-- Left: File Upload & Preview -->
-      <div class="lg:col-span-5 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="font-semibold text-[#1B3668] flex items-center gap-2">
-            <i data-lucide="file-up" class="w-5 h-5 text-[#AE232A]"></i>
-            อัปโหลดเอกสารบิล / ใบเสร็จ
-          </h2>
-          <button onclick="loadSampleBill()"
-            class="text-xs bg-blue-50 hover:bg-blue-100 text-[#1B3668] font-medium px-2.5 py-1 rounded-md border border-blue-200 transition">
-            โหลดบิลตัวอย่าง
+    <!-- ==================== PANEL 1: AI BILL OCR (MULTI-BILL BATCH) ==================== -->
+    <section id="panel-ocr" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Left: Multi-File / Multi-Page PDF Upload & Preview -->
+        <div class="lg:col-span-5 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-semibold text-[#1B3668] flex items-center gap-2">
+              <i data-lucide="files" class="w-5 h-5 text-[#AE232A]"></i>
+              อัปโหลดบิล / ใบเสร็จ (รองรับหลายบิลพร้อมกัน)
+            </h2>
+            <button onclick="loadSampleMultiBills()"
+              class="text-xs bg-blue-50 hover:bg-blue-100 text-[#1B3668] font-medium px-2.5 py-1 rounded-md border border-blue-200 transition">
+              โหลดตัวอย่าง 3 บิล
+            </button>
+          </div>
+
+          <!-- Dropzone (supports multiple files & multi-page PDF) -->
+          <div id="ocrDropzone" onclick="document.getElementById('ocrFileInput').click()"
+            class="border-2 border-dashed border-slate-300 hover:border-[#1B3668] rounded-xl p-5 text-center cursor-pointer transition bg-slate-50/70">
+            <input type="file" id="ocrFileInput" multiple accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp" class="hidden" onchange="handleOcrFile(event)" />
+            <i data-lucide="cloud-upload" class="w-9 h-9 mx-auto text-slate-400 mb-2"></i>
+            <p class="text-sm font-medium text-slate-700">คลิกเลือกไฟล์ หรือลากวาง (เลือกได้หลายไฟล์ / PDF หลายหน้า)</p>
+            <p class="text-xs text-slate-500 mt-1">รองรับ PDF รวมหลายบิล (เช่น 20 บิลใน 1 ไฟล์) หรือรูปภาพหลายใบพร้อมกัน (สูงสุด 25MB/ไฟล์)</p>
+          </div>
+
+          <!-- File Queue List -->
+          <div id="ocrFileListBox" class="hidden mt-3 space-y-1.5 max-h-32 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-slate-50"></div>
+
+          <!-- Preview Container -->
+          <div id="ocrPreviewBox"
+            class="mt-3 flex-1 min-h-[230px] bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden relative">
+            <p class="text-xs text-slate-400">ตัวอย่างเอกสารจะแสดงที่นี่</p>
+          </div>
+
+          <button id="btnRunAi" onclick="processBillWithAI()" disabled
+            class="mt-4 w-full bg-[#1B3668] hover:bg-[#14284d] disabled:bg-slate-300 text-white font-medium py-2.5 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>วิเคราะห์และแยกบิลทั้งหมดด้วย AI OCR</span>
           </button>
         </div>
 
-        <!-- Dropzone -->
-        <div id="ocrDropzone" onclick="document.getElementById('ocrFileInput').click()"
-          class="border-2 border-dashed border-slate-300 hover:border-[#1B3668] rounded-xl p-6 text-center cursor-pointer transition bg-slate-50/70">
-          <input type="file" id="ocrFileInput" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp" class="hidden" onchange="handleOcrFile(event)" />
-          <i data-lucide="cloud-upload" class="w-10 h-10 mx-auto text-slate-400 mb-2"></i>
-          <p class="text-sm font-medium text-slate-700">คลิกเลือกไฟล์ หรือลากไฟล์มาวางที่นี่</p>
-          <p class="text-xs text-slate-500 mt-1">รองรับไฟล์ PDF, JPG, PNG (ขนาดไม่เกิน 10MB)</p>
-        </div>
+        <!-- Right: Default Batch Settings & Summary Guide -->
+        <div class="lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between space-y-4">
+          <div>
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h2 class="font-semibold text-[#1B3668] flex items-center gap-2">
+                <i data-lucide="sliders-horizontal" class="w-5 h-5 text-[#AE232A]"></i>
+                ตั้งค่าเริ่มต้นสำหรับชุดบิลที่สกัดได้ (Default Mapping)
+              </h2>
+              <span id="ocrExtractStatus" class="text-xs text-slate-500">รอการนำเข้าข้อมูล</span>
+            </div>
 
-        <!-- Preview Container -->
-        <div id="ocrPreviewBox"
-          class="mt-4 flex-1 min-h-[280px] bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden relative">
-          <p class="text-xs text-slate-400">ตัวอย่างเอกสารจะแสดงที่นี่</p>
-        </div>
+            <p class="text-xs text-slate-600 mb-4">
+              ระบบจะให้ AI คาดการณ์ <strong>หน่วยงาน (Department)</strong> และ <strong>หมวดสาเหตุ</strong> จากรายการในแต่ละบิลให้อัตโนมัติ หรือคุณสามารถกำหนดค่าเริ่มต้นด้านล่างแล้วไปปรับแก้รายบิลในตารางตรวจสอบด้านล่างได้ครับ
+            </p>
 
-        <button id="btnRunAi" onclick="processBillWithAI()" disabled
-          class="mt-4 w-full bg-[#1B3668] hover:bg-[#14284d] disabled:bg-slate-300 text-white font-medium py-2.5 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
-          <i data-lucide="sparkles" class="w-4 h-4"></i>
-          <span>วิเคราะห์ข้อมูลด้วย AI OCR</span>
-        </button>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">หน่วยงานเริ่มต้น (หาก AI ระบุไม่ได้)</label>
+                <select id="ocrDefaultDept"
+                  class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
+                  <option value="OPD - ผู้ป่วยนอก">OPD - ผู้ป่วยนอก</option>
+                  <option value="IPD - ผู้ป่วยใน">IPD - ผู้ป่วยใน</option>
+                  <option value="ER - ฉุกเฉิน">ER - ฉุกเฉิน</option>
+                  <option value="LAB - ห้องปฏิบัติการ">LAB - ห้องปฏิบัติการ</option>
+                  <option value="Pharmacy - เภสัชกรรม">Pharmacy - เภสัชกรรม</option>
+                  <option value="OR - ห้องผ่าตัด">OR - ห้องผ่าตัด</option>
+                  <option value="Quality Center - ศูนย์คุณภาพ">Quality Center - ศูนย์คุณภาพ</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">ผู้รับผิดชอบเริ่มต้น (Default Owner)</label>
+                <input type="text" id="ocrDefaultOwner" value="หัวหน้าหน่วยงานที่เกี่ยวข้อง"
+                  class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">ประเภทต้นทุนเริ่มต้น (Cost Type)</label>
+                <select id="ocrDefaultCostType"
+                  class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
+                  <option value="COPQ - Internal Failure">COPQ - Internal Failure</option>
+                  <option value="COPQ - External Failure">COPQ - External Failure</option>
+                  <option value="COGQ - Prevention">COGQ - Prevention</option>
+                  <option value="COGQ - Appraisal">COGQ - Appraisal</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">หมวดสาเหตุเริ่มต้น (Root Cause)</label>
+                <select id="ocrDefaultRootCause"
+                  class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
+                  <option value="Rework / ทำซ้ำ">Rework / ทำซ้ำ</option>
+                  <option value="Scrap / เวชภัณฑ์ชำรุดหมดอายุ">Scrap / เวชภัณฑ์ชำรุดหมดอายุ</option>
+                  <option value="Equipment Failure / เครื่องมือขัดข้อง">Equipment Failure / เครื่องมือขัดข้อง</option>
+                  <option value="Process Delay / ความล่าช้าในกระบวนการ">Process Delay / ความล่าช้าในกระบวนการ</option>
+                  <option value="Quality Audit / การตรวจสอบคุณภาพ">Quality Audit / การตรวจสอบคุณภาพ</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Tips Box -->
+          <div class="bg-blue-50/70 border border-blue-200 rounded-lg p-3.5 text-xs text-slate-700 space-y-1">
+            <div class="font-semibold text-[#1B3668] flex items-center gap-1.5">
+              <i data-lucide="info" class="w-4 h-4"></i>
+              คำแนะนำสำหรับการอัปโหลด PDF รวมหลายบิล (เช่น 20 บิลใน 1 ไฟล์):
+            </div>
+            <ul class="list-disc list-inside space-y-0.5 text-slate-600">
+              <li>ใช้ค่าย <strong>Google Gemini</strong> (`gemini-2.5-flash`) หรือ <strong>OpenRouter</strong> จะอ่านไฟล์ PDF หลายหน้าได้โดยตรงและแม่นยำที่สุด</li>
+              <li>หลังกดวิเคราะห์ ระบบจะแสดงรายการบิลทั้งหมดที่ดึงได้ สามารถเลือก <strong>แผนก/หน่วยงานแยกทีละบิล</strong> แล้วกดบันทึกทั้งหมดเข้าสู่ Central Hub ในคลิกเดียว</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
-      <!-- Right: Extracted Form -->
-      <div class="lg:col-span-7 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-          <h2 class="font-semibold text-[#1B3668] flex items-center gap-2">
-            <i data-lucide="file-check-2" class="w-5 h-5 text-[#AE232A]"></i>
-            ตรวจสอบและยืนยันข้อมูลจากบิล
-          </h2>
-          <span id="ocrExtractStatus" class="text-xs text-slate-500">รอการนำเข้าข้อมูล</span>
-        </div>
-
-        <form id="ocrForm" onsubmit="saveOcrRecord(event)" class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">เลขที่เอกสาร / ใบกำกับภาษี *</label>
-              <input type="text" id="ocrDocNo" required placeholder="เช่น INV-2026-0891"
-                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">วันที่เกิดรายการ *</label>
-              <input type="date" id="ocrDate" required
-                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">ชื่อผู้ขาย / คู่ค้า (Vendor) *</label>
-              <input type="text" id="ocrVendor" required placeholder="บริษัท เมดิคอล ซัพพลาย จำกัด"
-                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">หน่วยงานที่รับผิดชอบ (Department) *</label>
-              <select id="ocrDept" required
-                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
-                <option value="OPD - ผู้ป่วยนอก">OPD - ผู้ป่วยนอก</option>
-                <option value="IPD - ผู้ป่วยใน">IPD - ผู้ป่วยใน</option>
-                <option value="ER - ฉุกเฉิน">ER - ฉุกเฉิน</option>
-                <option value="LAB - ห้องปฏิบัติการ">LAB - ห้องปฏิบัติการ</option>
-                <option value="Pharmacy - เภสัชกรรม">Pharmacy - เภสัชกรรม</option>
-                <option value="OR - ห้องผ่าตัด">OR - ห้องผ่าตัด</option>
-                <option value="Quality Center - ศูนย์คุณภาพ">Quality Center - ศูนย์คุณภาพ</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">ประเภทต้นทุน (Cost Type) *</label>
-              <select id="ocrCostType" required
-                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
-                <option value="COPQ - Internal Failure">COPQ - Internal Failure</option>
-                <option value="COPQ - External Failure">COPQ - External Failure</option>
-                <option value="COGQ - Prevention">COGQ - Prevention</option>
-                <option value="COGQ - Appraisal">COGQ - Appraisal</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">หมวดสาเหตุ (Root Cause) *</label>
-              <select id="ocrRootCause" required
-                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none bg-white">
-                <option value="Rework / ทำซ้ำ">Rework / ทำซ้ำ</option>
-                <option value="Scrap / เวชภัณฑ์ชำรุดหมดอายุ">Scrap / เวชภัณฑ์ชำรุดหมดอายุ</option>
-                <option value="Equipment Failure / เครื่องมือขัดข้อง">Equipment Failure / เครื่องมือขัดข้อง</option>
-                <option value="Process Delay / ความล่าช้าในกระบวนการ">Process Delay / ความล่าช้าในกระบวนการ</option>
-                <option value="Quality Audit / การตรวจสอบคุณภาพ">Quality Audit / การตรวจสอบคุณภาพ</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">ผู้รับผิดชอบเคส (Owner) *</label>
-              <input type="text" id="ocrOwner" required placeholder="ระบุชื่อหัวหน้าเวร/ผู้ดูแล"
-                class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none" />
-            </div>
-          </div>
-
+      <!-- Bottom Full-Width Staging Table for Extracted Bills -->
+      <div id="ocrStagingSection" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-5 space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">รายละเอียดรายการ / หมายเหตุ *</label>
-            <textarea id="ocrDesc" rows="2" required placeholder="ระบุรายละเอียดค่าใช้จ่ายจากบิล..."
-              class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1B3668] focus:outline-none"></textarea>
+            <h3 class="font-bold text-[#1B3668] text-base flex items-center gap-2">
+              <i data-lucide="list-checks" class="w-5 h-5 text-[#AE232A]"></i>
+              รายการบิลที่สกัดได้ทั้งหมด (<span id="ocrExtractedCount">0</span> บิล) — ตรวจสอบและเลือกแผนกก่อนบันทึก
+            </h3>
+            <p class="text-xs text-slate-500 mt-0.5">
+              ยอดรวมสุทธิทั้งหมด: <strong id="ocrBatchTotalAmount" class="text-[#AE232A]">฿0.00</strong> |
+              สรุปตามแผนก: <span id="ocrDeptBreakdown" class="font-medium text-[#1B3668]">-</span>
+            </p>
           </div>
-
-          <div
-            class="bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">ยอดก่อนภาษี (บาท)</label>
-              <input type="number" step="0.01" id="ocrSubtotal" oninput="calcOcrVat()" placeholder="0.00"
-                class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
-            </div>
-            <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">VAT 7% (บาท)</label>
-              <input type="number" step="0.01" id="ocrVat" placeholder="0.00"
-                class="w-full px-3 py-1.5 text-sm border border-slate-300 rounded-md bg-white" />
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-[#AE232A] mb-1">ยอดรวมสุทธิ (บาท) *</label>
-              <input type="number" step="0.01" id="ocrTotal" required placeholder="0.00"
-                class="w-full px-3 py-1.5 text-sm font-bold text-[#1B3668] border border-slate-300 rounded-md bg-white" />
-            </div>
-          </div>
-
-          <div class="flex justify-end pt-2">
-            <button type="submit"
-              class="bg-[#AE232A] hover:bg-[#8f1b21] text-white font-medium py-2.5 px-6 rounded-lg shadow-sm transition flex items-center gap-2">
-              <i data-lucide="plus-circle" class="w-4 h-4"></i>
-              <span>บันทึกเข้าสู่ Central Hub & แจ้งเตือน</span>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="addEmptyOcrRow()"
+              class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-2 rounded-lg border border-slate-300 transition flex items-center gap-1">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i> เพิ่มแถวบิลเอง
+            </button>
+            <button type="button" onclick="clearOcrStaging()"
+              class="text-xs text-slate-500 hover:text-[#AE232A] px-2.5 py-2 rounded-lg transition">
+              ล้างรายการที่ดึงมา
+            </button>
+            <button type="button" onclick="saveAllOcrRecords()"
+              class="bg-[#AE232A] hover:bg-[#8f1b21] text-white text-xs font-medium py-2.5 px-5 rounded-lg shadow-sm transition flex items-center gap-2">
+              <i data-lucide="save-all" class="w-4 h-4"></i>
+              <span>บันทึกทั้งหมดเข้าสู่ Central Hub (แยกตามแผนก)</span>
             </button>
           </div>
-        </form>
+        </div>
+
+        <div class="overflow-x-auto border border-slate-200 rounded-lg">
+          <table class="min-w-full divide-y divide-slate-200 text-xs">
+            <thead class="bg-slate-100 text-slate-700 font-semibold">
+              <tr>
+                <th class="px-2.5 py-2.5 text-center w-10">#</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[125px]">เลขที่บิล</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[125px]">วันที่</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[160px]">ผู้ขาย (Vendor)</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[175px]">หน่วยงาน (Department) *</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[165px]">ประเภทต้นทุน</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[175px]">หมวดสาเหตุ</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[200px]">รายละเอียดรายการ</th>
+                <th class="px-2.5 py-2.5 text-right min-w-[115px]">ยอดสุทธิ (บาท)</th>
+                <th class="px-2.5 py-2.5 text-left min-w-[150px]">ผู้รับผิดชอบ</th>
+                <th class="px-2.5 py-2.5 text-center w-10">ลบ</th>
+              </tr>
+            </thead>
+            <tbody id="ocrStagingTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 

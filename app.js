@@ -107,14 +107,37 @@ let records = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [
   }
 ];
 
-let currentOcrFileBase64 = null;
-let currentOcrMimeType = null;
-let currentOcrPreviewUrl = null;
+let ocrSelectedFiles = []; // Array of { name, mimeType, base64, previewUrl }
+let stagedOcrBills = [];   // Array of extracted bill objects
 let stagedExcelRows = [];
+
+const DEPT_OPTIONS = [
+  'OPD - ผู้ป่วยนอก',
+  'IPD - ผู้ป่วยใน',
+  'ER - ฉุกเฉิน',
+  'LAB - ห้องปฏิบัติการ',
+  'Pharmacy - เภสัชกรรม',
+  'OR - ห้องผ่าตัด',
+  'Quality Center - ศูนย์คุณภาพ'
+];
+
+const COST_TYPE_OPTIONS = [
+  'COPQ - Internal Failure',
+  'COPQ - External Failure',
+  'COGQ - Prevention',
+  'COGQ - Appraisal'
+];
+
+const ROOT_CAUSE_OPTIONS = [
+  'Rework / ทำซ้ำ',
+  'Scrap / เวชภัณฑ์ชำรุดหมดอายุ',
+  'Equipment Failure / เครื่องมือขัดข้อง',
+  'Process Delay / ความล่าช้าในกระบวนการ',
+  'Quality Audit / การตรวจสอบคุณภาพ'
+];
 
 // Set default dates to today
 const todayStr = new Date().toISOString().split('T')[0];
-document.getElementById('ocrDate').value = todayStr;
 document.getElementById('manDate').value = todayStr;
 
 updateApiBadge();
@@ -267,8 +290,8 @@ function updateApiBadge() {
   }
 }
 
-// ==================== 1. AI BILL OCR LOGIC ====================
-const MAX_OCR_FILE_BYTES = 10 * 1024 * 1024;
+// ==================== 1. AI BILL OCR LOGIC (MULTI-BILL BATCH) ====================
+const MAX_OCR_FILE_BYTES = 25 * 1024 * 1024;
 const EXT_TO_MIME = {
   pdf: 'application/pdf',
   jpg: 'image/jpeg',
@@ -287,53 +310,113 @@ function resolveOcrMimeType(file) {
   return EXT_TO_MIME[ext] || '';
 }
 
-function processSelectedOcrFile(file) {
-  if (!file) return;
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      resolve({
+        dataUrl,
+        base64: dataUrl.split(',')[1]
+      });
+    };
+    reader.onerror = () => reject(new Error(`ไม่สามารถอ่านไฟล์ ${file.name} ได้`));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function processSelectedOcrFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+
   const statusEl = document.getElementById('ocrExtractStatus');
-  const previewBox = document.getElementById('ocrPreviewBox');
   const btnRunAi = document.getElementById('btnRunAi');
 
-  const mimeType = resolveOcrMimeType(file);
-  if (!mimeType) {
-    statusEl.innerHTML = '<span class="text-[#AE232A] font-medium">รองรับเฉพาะไฟล์ PDF หรือรูปภาพ (JPG, PNG, WEBP)</span>';
-    return;
-  }
-  if (file.size > MAX_OCR_FILE_BYTES) {
-    statusEl.innerHTML = '<span class="text-[#AE232A] font-medium">ไฟล์มีขนาดเกิน 10MB กรุณาเลือกไฟล์ที่เล็กลง</span>';
-    return;
-  }
-
-  currentOcrMimeType = mimeType;
-  if (currentOcrPreviewUrl) {
-    URL.revokeObjectURL(currentOcrPreviewUrl);
-    currentOcrPreviewUrl = null;
-  }
-
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const dataUrl = e.target.result;
-    currentOcrFileBase64 = dataUrl.split(',')[1];
-
-    if (mimeType === 'application/pdf') {
-      currentOcrPreviewUrl = URL.createObjectURL(file);
-      previewBox.innerHTML = `<iframe src="${currentOcrPreviewUrl}" class="w-full h-[300px] border-0" title="PDF Preview"></iframe>`;
-    } else {
-      previewBox.innerHTML = `<img src="${dataUrl}" alt="Bill Preview" class="max-h-[300px] object-contain" />`;
+  let addedCount = 0;
+  for (const file of files) {
+    const mimeType = resolveOcrMimeType(file);
+    if (!mimeType) {
+      statusEl.innerHTML = `<span class="text-[#AE232A] font-medium">ข้ามไฟล์ ${file.name} (รองรับเฉพาะ PDF หรือรูปภาพ)</span>`;
+      continue;
+    }
+    if (file.size > MAX_OCR_FILE_BYTES) {
+      statusEl.innerHTML = `<span class="text-[#AE232A] font-medium">ไฟล์ ${file.name} มีขนาดเกิน 25MB</span>`;
+      continue;
     }
 
+    try {
+      const { dataUrl, base64 } = await readFileAsBase64(file);
+      const previewUrl = mimeType === 'application/pdf' ? URL.createObjectURL(file) : dataUrl;
+      ocrSelectedFiles.push({
+        name: file.name,
+        mimeType,
+        base64,
+        previewUrl
+      });
+      addedCount++;
+    } catch (err) {
+      statusEl.innerHTML = `<span class="text-[#AE232A] font-medium">${err.message}</span>`;
+    }
+  }
+
+  if (ocrSelectedFiles.length > 0) {
+    renderOcrFileQueue();
+    previewOcrFileAt(ocrSelectedFiles.length - 1);
     btnRunAi.disabled = false;
-    statusEl.textContent = `พร้อมวิเคราะห์: ${file.name}`;
-  };
-  reader.onerror = function() {
-    statusEl.innerHTML = '<span class="text-[#AE232A] font-medium">ไม่สามารถอ่านไฟล์ได้ กรุณาลองใหม่อีกครั้ง</span>';
-  };
-  reader.readAsDataURL(file);
+    statusEl.textContent = `พร้อมวิเคราะห์ทั้งหมด ${ocrSelectedFiles.length} ไฟล์ (คลิกปุ่มด้านล่างเพื่อแยกบิลทั้งหมด)`;
+  }
+}
+
+function renderOcrFileQueue() {
+  const box = document.getElementById('ocrFileListBox');
+  if (!ocrSelectedFiles.length) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  box.innerHTML = ocrSelectedFiles.map((f, idx) => `
+    <div class="flex items-center justify-between text-xs bg-white px-2.5 py-1.5 rounded border border-slate-200">
+      <button type="button" onclick="previewOcrFileAt(${idx})" class="text-left truncate font-medium text-[#1B3668] hover:underline flex-1 pr-2">
+        ${idx + 1}. ${escapeHtml(f.name)}
+      </button>
+      <button type="button" onclick="removeOcrFileAt(${idx})" class="text-slate-400 hover:text-[#AE232A] px-1" title="ลบไฟล์">✕</button>
+    </div>
+  `).join('');
+}
+
+function previewOcrFileAt(idx) {
+  const fileObj = ocrSelectedFiles[idx];
+  const previewBox = document.getElementById('ocrPreviewBox');
+  if (!fileObj) {
+    previewBox.innerHTML = '<p class="text-xs text-slate-400">ตัวอย่างเอกสารจะแสดงที่นี่</p>';
+    return;
+  }
+  if (fileObj.mimeType === 'application/pdf') {
+    previewBox.innerHTML = `<iframe src="${fileObj.previewUrl}" class="w-full h-[250px] border-0" title="PDF Preview"></iframe>`;
+  } else {
+    previewBox.innerHTML = `<img src="${fileObj.previewUrl}" alt="Bill Preview" class="max-h-[250px] object-contain" />`;
+  }
+}
+
+function removeOcrFileAt(idx) {
+  const removed = ocrSelectedFiles.splice(idx, 1)[0];
+  if (removed && removed.mimeType === 'application/pdf' && removed.previewUrl) {
+    URL.revokeObjectURL(removed.previewUrl);
+  }
+  renderOcrFileQueue();
+  if (ocrSelectedFiles.length > 0) {
+    previewOcrFileAt(0);
+    document.getElementById('ocrExtractStatus').textContent = `พร้อมวิเคราะห์ทั้งหมด ${ocrSelectedFiles.length} ไฟล์`;
+  } else {
+    previewOcrFileAt(-1);
+    document.getElementById('btnRunAi').disabled = true;
+    document.getElementById('ocrExtractStatus').textContent = 'รอการนำเข้าข้อมูล';
+  }
 }
 
 function handleOcrFile(event) {
-  const file = event.target.files[0];
-  processSelectedOcrFile(file);
-  // Reset input so re-selecting the same file still triggers onchange
+  processSelectedOcrFiles(event.target.files);
   event.target.value = '';
 }
 
@@ -358,53 +441,134 @@ function handleOcrFile(event) {
   });
 
   dropzone.addEventListener('drop', (e) => {
-    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    processSelectedOcrFile(file);
+    if (e.dataTransfer && e.dataTransfer.files) {
+      processSelectedOcrFiles(e.dataTransfer.files);
+    }
   });
 })();
 
-function loadSampleBill() {
+function loadSampleMultiBills() {
   document.getElementById('ocrPreviewBox').innerHTML = `
-    <div class="p-4 bg-white border border-slate-300 rounded shadow-sm text-xs w-full m-3 font-mono text-slate-700">
-      <div class="font-bold text-sm text-[#1B3668] border-b pb-1 mb-2">TAX INVOICE / ใบกำกับภาษี</div>
-      <div>ผู้ขาย: บริษัท สยามเมดิคอล ซัพพลาย จำกัด</div>
-      <div>เลขที่: INV-2026-1125 | วันที่: ${todayStr}</div>
-      <div class="mt-2 border-t border-b py-1">
-        1. ชุดตรวจ Rapid Test ทดแทนล็อตชำรุด (50 กล่อง) - 12,500.00
-      </div>
-      <div class="text-right mt-2">
-        <div>ยอดก่อนภาษี: 12,500.00</div>
-        <div>VAT 7%: 875.00</div>
-        <div class="font-bold text-[#AE232A]">รวมทั้งสิ้น: 13,375.00 บาท</div>
-      </div>
+    <div class="p-3.5 bg-white border border-slate-300 rounded shadow-sm text-xs w-full m-3 font-mono text-slate-700 space-y-1.5">
+      <div class="font-bold text-sm text-[#1B3668] border-b pb-1">BATCH PDF SAMPLE (3 ใบกำกับภาษีใน 1 ไฟล์)</div>
+      <div>• หน้า 1: INV-2026-1125 | LAB - ห้องปฏิบัติการ | 13,375.00 ฿</div>
+      <div>• หน้า 2: INV-2026-1128 | Pharmacy - เภสัชกรรม | 8,560.00 ฿</div>
+      <div>• หน้า 3: INV-2026-1130 | OR - ห้องผ่าตัด | 24,075.00 ฿</div>
     </div>
   `;
-  document.getElementById('ocrDocNo').value = 'INV-2026-1125';
-  document.getElementById('ocrDate').value = todayStr;
-  document.getElementById('ocrVendor').value = 'บริษัท สยามเมดิคอล ซัพพลาย จำกัด';
-  document.getElementById('ocrDept').value = 'LAB - ห้องปฏิบัติการ';
-  document.getElementById('ocrCostType').value = 'COPQ - Internal Failure';
-  document.getElementById('ocrRootCause').value = 'Scrap / เวชภัณฑ์ชำรุดหมดอายุ';
-  document.getElementById('ocrOwner').value = 'หัวหน้าเวร LAB (คุณนภา)';
-  document.getElementById('ocrDesc').value = 'ชุดตรวจ Rapid Test ทดแทนล็อตชำรุด (50 กล่อง) - INV-2026-1125';
-  document.getElementById('ocrSubtotal').value = '12500.00';
-  document.getElementById('ocrVat').value = '875.00';
-  document.getElementById('ocrTotal').value = '13375.00';
-  document.getElementById('ocrExtractStatus').innerHTML = '<span class="text-emerald-600 font-medium">✓ โหลดข้อมูลตัวอย่างสำเร็จ</span>';
+
+  stagedOcrBills = [
+    {
+      docNo: 'INV-2026-1125',
+      date: todayStr,
+      vendor: 'บริษัท สยามเมดิคอล ซัพพลาย จำกัด',
+      dept: 'LAB - ห้องปฏิบัติการ',
+      costType: 'COPQ - Internal Failure',
+      rootCause: 'Scrap / เวชภัณฑ์ชำรุดหมดอายุ',
+      desc: 'ชุดตรวจ Rapid Test ทดแทนล็อตชำรุด (50 กล่อง)',
+      subtotal: 12500,
+      vat: 875,
+      total: 13375.00,
+      owner: 'หัวหน้าเวร LAB (คุณนภา)'
+    },
+    {
+      docNo: 'INV-2026-1128',
+      date: todayStr,
+      vendor: 'บริษัท ฟาร์มาแคร์ ดิสทริบิวชั่น จำกัด',
+      dept: 'Pharmacy - เภสัชกรรม',
+      costType: 'COPQ - Internal Failure',
+      rootCause: 'Scrap / เวชภัณฑ์ชำรุดหมดอายุ',
+      desc: 'เวชภัณฑ์ยาฉีดทดแทนขวดที่แตกเสียหายระหว่างจัดเตรียม',
+      subtotal: 8000,
+      vat: 560,
+      total: 8560.00,
+      owner: 'เภสัชกรหัวหน้าเวร (คุณธนา)'
+    },
+    {
+      docNo: 'INV-2026-1130',
+      date: todayStr,
+      vendor: 'บริษัท เซอร์จิคอล เทค จำกัด',
+      dept: 'OR - ห้องผ่าตัด',
+      costType: 'COPQ - Internal Failure',
+      rootCause: 'Equipment Failure / เครื่องมือขัดข้อง',
+      desc: 'ค่าซ่อมด่วนและอะไหล่ชุดเครื่องจี้ไฟฟ้าห้องผ่าตัด 2',
+      subtotal: 22500,
+      vat: 1575,
+      total: 24075.00,
+      owner: 'หัวหน้าพยาบาล OR (คุณสุดา)'
+    }
+  ];
+
+  renderOcrStagingTable();
+  document.getElementById('ocrExtractStatus').innerHTML = '<span class="text-emerald-600 font-medium">✓ โหลดตัวอย่าง 3 บิลแยกตามแผนกสำเร็จ</span>';
 }
 
-function extractJsonFromText(rawText) {
-  const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch (e) {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('AI ไม่ได้ส่งข้อมูลกลับมาในรูปแบบ JSON ที่ถูกต้อง');
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function normalizeExtractedBills(rawText) {
+  if (!rawText || !rawText.trim()) {
+    throw new Error('เซิร์ฟเวอร์ตอบกลับมาเป็นค่าว่าง (ตรวจสอบชื่อ Model ID หรือโควตา API)');
   }
+  const cleaned = rawText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+  let parsed = null;
+
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    // Try extracting JSON object or array
+    const objMatch = cleaned.match(/\{[\s\S]*\}/);
+    const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+    const candidate = objMatch ? objMatch[0] : (arrMatch ? arrMatch[0] : null);
+    if (candidate) {
+      try {
+        parsed = JSON.parse(candidate);
+      } catch (_) {}
+    }
+  }
+
+  if (!parsed) {
+    throw new Error(`AI ตอบกลับไม่ใช่ JSON: "${cleaned.slice(0, 150)}"`);
+  }
+
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed.bills)) return parsed.bills;
+  if (Array.isArray(parsed.invoices)) return parsed.invoices;
+  if (Array.isArray(parsed.items)) return parsed.items;
+  if (typeof parsed === 'object') return [parsed];
+  return [];
 }
 
-async function callGeminiProvider(cfg, prompt) {
+function mapDeptSuggestion(rawDept) {
+  if (!rawDept) return document.getElementById('ocrDefaultDept').value;
+  const upper = String(rawDept).toUpperCase();
+  if (upper.includes('LAB') || upper.includes('ปฏิบัติการ')) return 'LAB - ห้องปฏิบัติการ';
+  if (upper.includes('PHARM') || upper.includes('เภสัช') || upper.includes('ยา')) return 'Pharmacy - เภสัชกรรม';
+  if (upper.includes('OR') || upper.includes('ผ่าตัด')) return 'OR - ห้องผ่าตัด';
+  if (upper.includes('ER') || upper.includes('ฉุกเฉิน')) return 'ER - ฉุกเฉิน';
+  if (upper.includes('IPD') || upper.includes('ผู้ป่วยใน') || upper.includes('WARD')) return 'IPD - ผู้ป่วยใน';
+  if (upper.includes('OPD') || upper.includes('ผู้ป่วยนอก')) return 'OPD - ผู้ป่วยนอก';
+  if (upper.includes('QUALITY') || upper.includes('คุณภาพ')) return 'Quality Center - ศูนย์คุณภาพ';
+  return document.getElementById('ocrDefaultDept').value;
+}
+
+function mapRootCauseSuggestion(rawCause) {
+  if (!rawCause) return document.getElementById('ocrDefaultRootCause').value;
+  const s = String(rawCause).toLowerCase();
+  if (s.includes('scrap') || s.includes('หมดอายุ') || s.includes('ชำรุด') || s.includes('แตก')) return 'Scrap / เวชภัณฑ์ชำรุดหมดอายุ';
+  if (s.includes('equip') || s.includes('เครื่องมือ') || s.includes('ซ่อม') || s.includes('ขัดข้อง')) return 'Equipment Failure / เครื่องมือขัดข้อง';
+  if (s.includes('delay') || s.includes('ล่าช้า')) return 'Process Delay / ความล่าช้าในกระบวนการ';
+  if (s.includes('audit') || s.includes('สอบเทียบ') || s.includes('ตรวจ')) return 'Quality Audit / การตรวจสอบคุณภาพ';
+  if (s.includes('rework') || s.includes('ทำซ้ำ')) return 'Rework / ทำซ้ำ';
+  return document.getElementById('ocrDefaultRootCause').value;
+}
+
+async function callGeminiProvider(cfg, prompt, fileObj) {
   const model = cfg.model || PROVIDER_DEFAULTS.gemini.defaultModel;
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`, {
     method: 'POST',
@@ -413,7 +577,7 @@ async function callGeminiProvider(cfg, prompt) {
       contents: [{
         parts: [
           { text: prompt },
-          { inline_data: { mime_type: currentOcrMimeType, data: currentOcrFileBase64 } }
+          { inline_data: { mime_type: fileObj.mimeType, data: fileObj.base64 } }
         ]
       }],
       generationConfig: { responseMimeType: 'application/json' }
@@ -424,17 +588,17 @@ async function callGeminiProvider(cfg, prompt) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
-async function callAnthropicProvider(cfg, prompt) {
+async function callAnthropicProvider(cfg, prompt, fileObj) {
   const model = cfg.model || PROVIDER_DEFAULTS.anthropic.defaultModel;
-  const isPdf = currentOcrMimeType === 'application/pdf';
+  const isPdf = fileObj.mimeType === 'application/pdf';
   const mediaBlock = isPdf
     ? {
         type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: currentOcrFileBase64 }
+        source: { type: 'base64', media_type: 'application/pdf', data: fileObj.base64 }
       }
     : {
         type: 'image',
-        source: { type: 'base64', media_type: currentOcrMimeType, data: currentOcrFileBase64 }
+        source: { type: 'base64', media_type: fileObj.mimeType, data: fileObj.base64 }
       };
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -447,7 +611,7 @@ async function callAnthropicProvider(cfg, prompt) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       messages: [{
         role: 'user',
         content: [
@@ -462,11 +626,11 @@ async function callAnthropicProvider(cfg, prompt) {
   return data.content?.[0]?.text || '';
 }
 
-async function callOpenAiCompatibleProvider(cfg, prompt) {
+async function callOpenAiCompatibleProvider(cfg, prompt, fileObj) {
   const providerMeta = PROVIDER_DEFAULTS[cfg.provider] || {};
-  const isPdf = currentOcrMimeType === 'application/pdf';
-  if (isPdf && cfg.provider !== 'openrouter') {
-    throw new Error(`ค่าย ${providerMeta.label || cfg.provider} รองรับการส่งไฟล์รูปภาพ (JPG/PNG/WEBP) โดยตรงผ่านเบราว์เซอร์เท่านั้น กรุณาแปลง PDF เป็นรูปภาพ หรือใช้ค่าย Gemini / Claude / OpenRouter`);
+  const isPdf = fileObj.mimeType === 'application/pdf';
+  if (isPdf && !['openrouter', 'custom'].includes(cfg.provider)) {
+    throw new Error(`ค่าย ${providerMeta.label || cfg.provider} รองรับการส่งไฟล์รูปภาพ (JPG/PNG/WEBP) โดยตรงผ่านเบราว์เซอร์เท่านั้น กรุณาใช้ค่าย Gemini / Claude / OpenRouter / Custom สำหรับไฟล์ PDF`);
   }
 
   let endpoint = providerMeta.endpoint || 'https://api.openai.com/v1/chat/completions';
@@ -483,11 +647,11 @@ async function callOpenAiCompatibleProvider(cfg, prompt) {
     endpoint = cfg.baseUrl;
   }
 
-  const dataUrl = `data:${currentOcrMimeType};base64,${currentOcrFileBase64}`;
+  const dataUrl = `data:${fileObj.mimeType};base64,${fileObj.base64}`;
   const contentParts = [
     { type: 'text', text: prompt },
     isPdf
-      ? { type: 'file', file: { filename: 'invoice.pdf', file_data: dataUrl } }
+      ? { type: 'file', file: { filename: fileObj.name || 'invoices.pdf', file_data: dataUrl } }
       : { type: 'image_url', image_url: { url: dataUrl } }
   ];
 
@@ -519,81 +683,251 @@ async function processBillWithAI() {
   const btn = document.getElementById('btnRunAi');
 
   if (!cfg.apiKey) {
-    alert('กรุณาตั้งค่า AI API Key ที่มุมขวาบนก่อน หรือกดปุ่ม "โหลดบิลตัวอย่าง" เพื่อทดสอบครับ');
+    alert('กรุณาตั้งค่า AI API Key ที่มุมขวาบนก่อน หรือกดปุ่ม "โหลดตัวอย่าง 3 บิล" เพื่อทดสอบครับ');
     openApiModal();
     return;
   }
 
-  if (!currentOcrFileBase64) return;
+  if (!ocrSelectedFiles.length) return;
 
   const providerLabel = (PROVIDER_DEFAULTS[cfg.provider] || { label: cfg.provider }).label;
-  btn.disabled = true;
-  statusEl.innerHTML = `<span class="text-blue-600 animate-pulse">กำลังอ่านเอกสารด้วย ${providerLabel} (${cfg.model})...</span>`;
+  const defaultDept = document.getElementById('ocrDefaultDept').value;
+  const defaultCostType = document.getElementById('ocrDefaultCostType').value;
+  const defaultRootCause = document.getElementById('ocrDefaultRootCause').value;
+  const defaultOwner = document.getElementById('ocrDefaultOwner').value.trim() || 'หัวหน้าหน่วยงานที่เกี่ยวข้อง';
 
-  const prompt = `Extract invoice/bill data for a hospital COPQ (Cost of Poor Quality) system. Return ONLY valid JSON with these exact keys (no markdown, no explanation):
-  {
-    "docNo": "string",
-    "date": "YYYY-MM-DD",
-    "vendor": "string",
-    "description": "string summary of items in Thai",
-    "subtotal": number,
-    "vat": number,
-    "total": number
-  }`;
+  btn.disabled = true;
+  const allExtracted = [];
+
+  const prompt = `You are a hospital Quality Center (COPQ) invoice OCR parser.
+This document/file may contain ONE or MULTIPLE invoices/bills (for example, 10-20 invoices combined in a multi-page PDF).
+Extract EVERY SINGLE invoice/bill separately. Do NOT merge multiple invoices into one record.
+Return ONLY valid JSON (no markdown, no explanation) in this exact format:
+{
+  "bills": [
+    {
+      "docNo": "invoice or tax invoice number",
+      "date": "YYYY-MM-DD",
+      "vendor": "vendor or supplier name",
+      "department": "guess hospital department from items: OPD, IPD, ER, LAB, Pharmacy, OR, or Quality Center",
+      "rootCause": "guess cause: Rework, Scrap, Equipment Failure, Process Delay, or Quality Audit",
+      "description": "concise summary of items in Thai",
+      "subtotal": 0,
+      "vat": 0,
+      "total": 0
+    }
+  ]
+}`;
 
   try {
-    let rawText = '';
-    if (cfg.provider === 'gemini') {
-      rawText = await callGeminiProvider(cfg, prompt);
-    } else if (cfg.provider === 'anthropic') {
-      rawText = await callAnthropicProvider(cfg, prompt);
-    } else {
-      rawText = await callOpenAiCompatibleProvider(cfg, prompt);
+    for (let i = 0; i < ocrSelectedFiles.length; i++) {
+      const fileObj = ocrSelectedFiles[i];
+      statusEl.innerHTML = `<span class="text-blue-600 animate-pulse">กำลังวิเคราะห์ไฟล์ ${i + 1}/${ocrSelectedFiles.length} (${escapeHtml(fileObj.name)}) ด้วย ${providerLabel}...</span>`;
+
+      let rawText = '';
+      if (cfg.provider === 'gemini') {
+        rawText = await callGeminiProvider(cfg, prompt, fileObj);
+      } else if (cfg.provider === 'anthropic') {
+        rawText = await callAnthropicProvider(cfg, prompt, fileObj);
+      } else {
+        rawText = await callOpenAiCompatibleProvider(cfg, prompt, fileObj);
+      }
+
+      const billsFromFile = normalizeExtractedBills(rawText);
+      billsFromFile.forEach((b, bIdx) => {
+        allExtracted.push({
+          docNo: b.docNo || `DOC-${i + 1}-${bIdx + 1}`,
+          date: b.date || todayStr,
+          vendor: b.vendor || '-',
+          dept: b.department ? mapDeptSuggestion(b.department) : defaultDept,
+          costType: defaultCostType,
+          rootCause: b.rootCause ? mapRootCauseSuggestion(b.rootCause) : defaultRootCause,
+          desc: b.description || '-',
+          subtotal: parseFloat(b.subtotal) || 0,
+          vat: parseFloat(b.vat) || 0,
+          total: parseFloat(b.total) || 0,
+          owner: defaultOwner
+        });
+      });
     }
 
-    const parsed = extractJsonFromText(rawText);
+    if (!allExtracted.length) {
+      throw new Error('ไม่พบรายการบิลในเอกสารที่อัปโหลด');
+    }
 
-    document.getElementById('ocrDocNo').value = parsed.docNo || '';
-    if (parsed.date) document.getElementById('ocrDate').value = parsed.date;
-    document.getElementById('ocrVendor').value = parsed.vendor || '';
-    document.getElementById('ocrDesc').value = parsed.description || '';
-    document.getElementById('ocrSubtotal').value = parsed.subtotal || 0;
-    document.getElementById('ocrVat').value = parsed.vat || 0;
-    document.getElementById('ocrTotal').value = parsed.total || 0;
-
-    statusEl.innerHTML = `<span class="text-emerald-600 font-medium">✓ สกัดข้อมูลด้วย ${providerLabel} สำเร็จ</span>`;
+    stagedOcrBills = stagedOcrBills.concat(allExtracted);
+    renderOcrStagingTable();
+    statusEl.innerHTML = `<span class="text-emerald-600 font-medium">✓ สกัดข้อมูลสำเร็จทั้งหมด ${allExtracted.length} บิล จาก ${ocrSelectedFiles.length} ไฟล์</span>`;
   } catch (err) {
     console.error(err);
-    statusEl.innerHTML = `<span class="text-[#AE232A]">เกิดข้อผิดพลาด (${providerLabel}): ${err.message}</span>`;
+    statusEl.innerHTML = `<span class="text-[#AE232A]">เกิดข้อผิดพลาด (${providerLabel}): ${escapeHtml(err.message)}</span>`;
   } finally {
     btn.disabled = false;
   }
 }
 
-function calcOcrVat() {
-  const sub = parseFloat(document.getElementById('ocrSubtotal').value) || 0;
-  const vat = +(sub * 0.07).toFixed(2);
-  document.getElementById('ocrVat').value = vat;
-  document.getElementById('ocrTotal').value = +(sub + vat).toFixed(2);
+function renderOcrStagingTable() {
+  const section = document.getElementById('ocrStagingSection');
+  const tbody = document.getElementById('ocrStagingTableBody');
+
+  if (!stagedOcrBills.length) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+
+  tbody.innerHTML = stagedOcrBills.map((bill, idx) => {
+    const deptOptionsHtml = DEPT_OPTIONS.map(d =>
+      `<option value="${d}" ${bill.dept === d ? 'selected' : ''}>${d}</option>`
+    ).join('');
+
+    const costOptionsHtml = COST_TYPE_OPTIONS.map(c =>
+      `<option value="${c}" ${bill.costType === c ? 'selected' : ''}>${c}</option>`
+    ).join('');
+
+    const causeOptionsHtml = ROOT_CAUSE_OPTIONS.map(rc =>
+      `<option value="${rc}" ${bill.rootCause === rc ? 'selected' : ''}>${rc}</option>`
+    ).join('');
+
+    return `
+      <tr class="hover:bg-slate-50">
+        <td class="px-2.5 py-2 text-center font-semibold text-slate-500">${idx + 1}</td>
+        <td class="px-2.5 py-2">
+          <input type="text" value="${escapeHtml(bill.docNo)}" onchange="updateStagedBill(${idx}, 'docNo', this.value)"
+            class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white" />
+        </td>
+        <td class="px-2.5 py-2">
+          <input type="date" value="${escapeHtml(bill.date)}" onchange="updateStagedBill(${idx}, 'date', this.value)"
+            class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white" />
+        </td>
+        <td class="px-2.5 py-2">
+          <input type="text" value="${escapeHtml(bill.vendor)}" onchange="updateStagedBill(${idx}, 'vendor', this.value)"
+            class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white" />
+        </td>
+        <td class="px-2.5 py-2">
+          <select onchange="updateStagedBill(${idx}, 'dept', this.value)"
+            class="w-full px-2 py-1 text-xs font-medium text-[#1B3668] border border-blue-300 rounded bg-blue-50/40">
+            ${deptOptionsHtml}
+          </select>
+        </td>
+        <td class="px-2.5 py-2">
+          <select onchange="updateStagedBill(${idx}, 'costType', this.value)"
+            class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white">
+            ${costOptionsHtml}
+          </select>
+        </td>
+        <td class="px-2.5 py-2">
+          <select onchange="updateStagedBill(${idx}, 'rootCause', this.value)"
+            class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white">
+            ${causeOptionsHtml}
+          </select>
+        </td>
+        <td class="px-2.5 py-2">
+          <input type="text" value="${escapeHtml(bill.desc)}" onchange="updateStagedBill(${idx}, 'desc', this.value)"
+            class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white" />
+        </td>
+        <td class="px-2.5 py-2">
+          <input type="number" step="0.01" value="${bill.total}" onchange="updateStagedBill(${idx}, 'total', parseFloat(this.value) || 0)"
+            class="w-full px-2 py-1 text-xs text-right font-bold text-[#AE232A] border border-slate-300 rounded bg-white" />
+        </td>
+        <td class="px-2.5 py-2">
+          <input type="text" value="${escapeHtml(bill.owner)}" onchange="updateStagedBill(${idx}, 'owner', this.value)"
+            class="w-full px-2 py-1 text-xs border border-slate-300 rounded bg-white" />
+        </td>
+        <td class="px-2.5 py-2 text-center">
+          <button type="button" onclick="removeStagedBill(${idx})" class="text-slate-400 hover:text-[#AE232A] font-bold" title="ลบรายการนี้">✕</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  updateOcrStagingSummary();
 }
 
-function saveOcrRecord(e) {
-  e.preventDefault();
-  const newRec = {
-    id: generateCaseId(),
-    date: document.getElementById('ocrDate').value,
-    source: 'AI Bill OCR',
-    dept: document.getElementById('ocrDept').value,
-    costType: document.getElementById('ocrCostType').value,
-    rootCause: document.getElementById('ocrRootCause').value,
-    desc: `[${document.getElementById('ocrDocNo').value}] ${document.getElementById('ocrVendor').value} - ${document.getElementById('ocrDesc').value}`,
-    amount: parseFloat(document.getElementById('ocrTotal').value) || 0,
-    owner: document.getElementById('ocrOwner').value,
-    notified: true
-  };
-  addRecord(newRec);
-  document.getElementById('ocrForm').reset();
-  document.getElementById('ocrDate').value = todayStr;
+function updateStagedBill(idx, field, value) {
+  if (!stagedOcrBills[idx]) return;
+  stagedOcrBills[idx][field] = value;
+  updateOcrStagingSummary();
+}
+
+function updateOcrStagingSummary() {
+  document.getElementById('ocrExtractedCount').textContent = stagedOcrBills.length;
+  let totalSum = 0;
+  const deptCounts = {};
+
+  stagedOcrBills.forEach(b => {
+    totalSum += (parseFloat(b.total) || 0);
+    const shortDept = (b.dept || 'อื่นๆ').split(' - ')[0];
+    deptCounts[shortDept] = (deptCounts[shortDept] || 0) + 1;
+  });
+
+  document.getElementById('ocrBatchTotalAmount').textContent =
+    '฿' + totalSum.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+
+  const breakdownText = Object.entries(deptCounts)
+    .map(([dept, count]) => `${dept} (${count} บิล)`)
+    .join(', ');
+  document.getElementById('ocrDeptBreakdown').textContent = breakdownText || '-';
+}
+
+function addEmptyOcrRow() {
+  stagedOcrBills.push({
+    docNo: `INV-${todayStr.replace(/-/g, '')}-${stagedOcrBills.length + 1}`,
+    date: todayStr,
+    vendor: '',
+    dept: document.getElementById('ocrDefaultDept').value,
+    costType: document.getElementById('ocrDefaultCostType').value,
+    rootCause: document.getElementById('ocrDefaultRootCause').value,
+    desc: '',
+    subtotal: 0,
+    vat: 0,
+    total: 0,
+    owner: document.getElementById('ocrDefaultOwner').value.trim() || 'หัวหน้าหน่วยงานที่เกี่ยวข้อง'
+  });
+  renderOcrStagingTable();
+}
+
+function removeStagedBill(idx) {
+  stagedOcrBills.splice(idx, 1);
+  renderOcrStagingTable();
+}
+
+function clearOcrStaging() {
+  stagedOcrBills = [];
+  renderOcrStagingTable();
+  document.getElementById('ocrExtractStatus').textContent = 'ล้างรายการที่สกัดแล้ว';
+}
+
+function saveAllOcrRecords() {
+  if (!stagedOcrBills.length) return;
+
+  const deptSet = new Set();
+  // Insert in reverse so order matches top-to-bottom in Hub
+  for (let i = stagedOcrBills.length - 1; i >= 0; i--) {
+    const b = stagedOcrBills[i];
+    deptSet.add((b.dept || '').split(' - ')[0]);
+    records.unshift({
+      id: generateCaseId(),
+      date: b.date || todayStr,
+      source: 'AI Bill OCR',
+      dept: b.dept,
+      costType: b.costType,
+      rootCause: b.rootCause,
+      desc: `[${b.docNo}] ${b.vendor} - ${b.desc}`,
+      amount: parseFloat(b.total) || 0,
+      owner: b.owner || 'หัวหน้าหน่วยงานที่เกี่ยวข้อง',
+      notified: true
+    });
+  }
+
+  const savedCount = stagedOcrBills.length;
+  saveAndRender();
+  triggerOutlookToast(`บันทึกบิลจาก AI OCR จำนวน ${savedCount} รายการ (แยก ${deptSet.size} แผนก) เข้าสู่ Central Hub เรียบร้อยแล้ว`);
+
+  stagedOcrBills = [];
+  renderOcrStagingTable();
+  document.getElementById('ocrExtractStatus').innerHTML = `<span class="text-emerald-600 font-medium">✓ บันทึกทั้งหมด ${savedCount} บิลลง Hub เรียบร้อย</span>`;
 }
 
 // ==================== 2. EXCEL BATCH IMPORT LOGIC ====================
